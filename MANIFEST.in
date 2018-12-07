@@ -1,0 +1,2 @@
+include LICENSE requirements_devel.txt
+recursive-include tests *.py
