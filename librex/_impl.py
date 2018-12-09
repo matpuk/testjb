@@ -5,7 +5,9 @@ from typing import Any, Union, Text
 
 
 class RexError(Exception):
-    pass
+    def __init__(self) -> None:
+        self.message = 'Bad regular expression'
+        super(RexError, self).__init__(self.message)
 
 
 class RexPattern(object):

@@ -21,16 +21,20 @@ def cli():
     sys.exit(main(args.pattern[0], args.string[0]))
 
 
+def eprint(*args: Text) -> None:
+    print(*args, file=sys.stderr)
+
+
 def main(pattern: Text, string: Text) -> int:
     result: int = 0
     try:
         if not librex.match(pattern, string):
             result = 1
     except librex.RexError as e:
-        print()  # TODO: error message
+        eprint('librex.RexError: {}'.format(e.message))
         result = 2
     except Exception as e:
-        print()  # TODO: unexpected error message
+        eprint(str(e))
         result = 2
 
     return result
