@@ -5,7 +5,7 @@ from typing import Union, Text
 
 from ._impl import RexError, RexPattern, _compile
 
-__all__ = ['RexError', 'match']
+__all__ = ['RexError', 'match', 'compile']
 
 __version__ = "0.0.1"
 
