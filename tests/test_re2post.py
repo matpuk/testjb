@@ -1,7 +1,7 @@
 import pytest
 
 from librex import RexError
-from librex._impl import _re2post, _CONCAT_OP, _EARLY_MATCH_OP, _MATCH_OP
+from librex._impl import _re2post, _CONCAT_OP, _EARLY_MATCH_OP, _MATCH_OP, _ESCAPE_SYM
 
 
 @pytest.mark.parametrize('re_input, re_post', [
@@ -54,6 +54,17 @@ from librex._impl import _re2post, _CONCAT_OP, _EARLY_MATCH_OP, _MATCH_OP
     # Unicode support
     ('п|у|л', 'пул||'),
     ('п*пф*', ''.join(('п*п', _CONCAT_OP, 'ф*', _CONCAT_OP))),
+    # '\\' metacharacter (escaping)
+    (r'\+', r'\+'),
+    (r'a\+', r'a\+' + _CONCAT_OP),
+    (r'\\', r'\\'),
+    (r'\*\?\+\(\|\)', ''.join(
+        (r'\*\?', _CONCAT_OP, r'\+', _CONCAT_OP, r'\(', _CONCAT_OP, r'\|', _CONCAT_OP, r'\)', _CONCAT_OP)
+    )),
+    (_CONCAT_OP, _ESCAPE_SYM + _CONCAT_OP),
+    ('a' + _CONCAT_OP, ''.join(('a', _ESCAPE_SYM, _CONCAT_OP, _CONCAT_OP))),
+    ('a' + _CONCAT_OP + 'b', ''.join(('a', _ESCAPE_SYM, _CONCAT_OP, _CONCAT_OP, 'b', _CONCAT_OP))),
+    (_CONCAT_OP + _MATCH_OP, ''.join((_ESCAPE_SYM, _CONCAT_OP, _ESCAPE_SYM, _MATCH_OP, _CONCAT_OP)))
 ])
 def test_re2post_positive(re_input, re_post):
     assert _re2post(re_input) == re_post
@@ -74,7 +85,12 @@ def test_re2post_positive(re_input, re_post):
     'a+++',
     'a+?*',
     'a**?',
-    'a??'
+    'a??',
+    r'\a',
+    r'ab\j',
+    r'\(a)',
+    _ESCAPE_SYM + _ESCAPE_SYM + _ESCAPE_SYM,
+    'abd' + _ESCAPE_SYM,
 ])
 def test_re2post_negative(re_input):
     with pytest.raises(RexError):
