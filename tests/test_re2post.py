@@ -1,7 +1,7 @@
 import pytest
 
 from librex import RexError
-from librex._impl import _re2post, _CONCAT_OP, _MATCH_OP
+from librex._impl import _re2post, _CONCAT_OP, _EARLY_MATCH_OP, _MATCH_OP
 
 
 @pytest.mark.parametrize('re_input, re_post', [
@@ -44,13 +44,13 @@ from librex._impl import _re2post, _CONCAT_OP, _MATCH_OP
     )),
     # '' - empty regular expression or empty regular symbol around '|'
     ('', _MATCH_OP),
-    ('|', ''.join((_MATCH_OP, _MATCH_OP, '|'))),
-    ('|a', ''.join((_MATCH_OP, 'a|'))),
-    ('a|', ''.join(('a', _MATCH_OP, '|'))),
-    ('ab|', ''.join(('ab', _CONCAT_OP, _MATCH_OP, '|'))),
-    ('a(|b)', ''.join(('a', _MATCH_OP, 'b|', _CONCAT_OP))),
-    ('a(b|)', ''.join(('a', 'b', _MATCH_OP, '|', _CONCAT_OP))),
-    ('a||b', ''.join(('a', _MATCH_OP, 'b||'))),
+    ('|', ''.join((_EARLY_MATCH_OP, _EARLY_MATCH_OP, '|'))),
+    ('|a', ''.join((_EARLY_MATCH_OP, 'a|'))),
+    ('a|', ''.join(('a', _EARLY_MATCH_OP, '|'))),
+    ('ab|', ''.join(('ab', _CONCAT_OP, _EARLY_MATCH_OP, '|'))),
+    ('a(|b)', ''.join(('a', _EARLY_MATCH_OP, 'b|', _CONCAT_OP))),
+    ('a(b|)', ''.join(('a', 'b', _EARLY_MATCH_OP, '|', _CONCAT_OP))),
+    ('a||b', ''.join(('a', _EARLY_MATCH_OP, 'b||'))),
     # Unicode support
     ('п|у|л', 'пул||'),
     ('п*пф*', ''.join(('п*п', _CONCAT_OP, 'ф*', _CONCAT_OP))),

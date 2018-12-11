@@ -9,6 +9,7 @@
 #
 from dataclasses import dataclass
 from enum import Enum
+from reprlib import recursive_repr, Repr
 from typing import Union, Text, NamedTuple, List
 
 from .stack import Stack
@@ -24,21 +25,40 @@ class RexError(Exception):
         super(RexError, self).__init__(self.message)
 
 
-@dataclass(frozen=True)
+@dataclass
 class RexPattern(object):
     pattern: Text
     _nfa: '_State' = None
+    _m_session: '_MatchSession' = None
+
+    def __post_init__(self):
+        self._m_session = _MatchSession(0)
 
     def match(self, string: Text) -> bool:
-        return _match(self._nfa, string)
+        self._m_session.next()
+        return _match(self, string)
 
 
 #
 # Implementation
 #
 
-_MATCH_OP: Text = '\x00'
-_CONCAT_OP: Text = '\x01'
+#
+# Precompiled NFA can be run multiple times against various strings.
+# Every run must be able to distinguish labeled and unlabeled states.
+# This object holds current list_id value used for labeling per RexPattern object instance.
+#
+@dataclass
+class _MatchSession(object):
+    list_id: int
+
+    def next(self):
+        self.list_id += 1
+
+
+_EARLY_MATCH_OP: Text = '\x00'
+_MATCH_OP: Text = '\x01'
+_CONCAT_OP: Text = '\x02'
 
 _REPEATER_SYMS = '*+?'
 
@@ -54,9 +74,11 @@ class _Paren(NamedTuple):
 #
 # Differences from the original algorithm:
 #  - multiple consecutive repeater symbols generate RexError
-#  - introduced _MATCH_OP special symbol as a hint for compiler to generate MATCH state (see _post2nfa())
+#  - introduced _EARLY_MATCH_OP and _MATCH_OP special symbols as a hint for compiler
+#    to generate EARLY_MATCH and MATCH states accordingly (see _post2nfa())
 #  - empty regexp re generates string with _MATCH_OP symbol
-#  - any empty alternative for '|' is replaced with _MATCH_OP symbol ('a||b', '|', 'a|', etc. are valid expressions now)
+#  - any empty alternative for '|' is replaced with _EARLY_MATCH_OP symbol:
+#      'a||b', '|', 'a|', etc. - are valid expressions now
 #
 def _re2post(re: Text) -> Text:
     paren: Stack[_Paren] = Stack()
@@ -80,7 +102,7 @@ def _re2post(re: Text) -> Text:
             natom = 0
         elif sym == '|':
             if natom == 0:
-                dst.append(_MATCH_OP)
+                dst.append(_EARLY_MATCH_OP)
                 natom = 1
 
             natom -= 1
@@ -94,7 +116,7 @@ def _re2post(re: Text) -> Text:
                 raise RexError()
 
             if natom == 0:
-                dst.append(_MATCH_OP)
+                dst.append(_EARLY_MATCH_OP)
                 natom = 1
 
             natom -= 1
@@ -133,7 +155,7 @@ def _re2post(re: Text) -> Text:
         raise RexError()
 
     if natom == 0 and nalt > 0:
-        dst.append(_MATCH_OP)
+        dst.append(_EARLY_MATCH_OP)
         natom = 1
 
     natom -= 1
@@ -150,15 +172,17 @@ def _re2post(re: Text) -> Text:
 
 #
 # Represents an NFA state plus zero or one or two arrows exiting.
-# if stype == MATCH, no arrows out; matching state.
-# If stype == SPLIT, unlabeled arrows to out and out1 (if != None).
-# If stype == SYM, labeled arrow with symbol sym to out.
+# if s_type == EARLY_MATCH, no arrows out; early matching state. no need to run NFA further.
+# if s_type == MATCH, no arrows out; matching state.
+# If s_type == SPLIT, unlabeled arrows to out and out1 (if != None or points to NONE state).
+# If s_type == SYM, labeled arrow with symbol sym to out.
 #
 class _StateType(Enum):
     NONE = 0
     SYM = 1
-    MATCH = 2
-    SPLIT = 3
+    EARLY_MATCH = 2
+    MATCH = 3
+    SPLIT = 4
 
 
 @dataclass
@@ -169,14 +193,27 @@ class _State(object):
     out1: '_State' = None
     last_list: int = 0
 
+    @recursive_repr()
+    def __repr__(self):
+        r = Repr()
+        r.maxother = 10000
+        return '(_State: ' + ', '.join(
+            map(r.repr, (self.sym, self.s_type, self.out, self.out1, self.last_list))
+        ) + ')'
+
     def __post_init__(self):
-        if self.s_type not in (_StateType.NONE, _StateType.MATCH):
+        # to make __repr__ happy with our dataclass
+        setattr(self, '__name__', self.__class__.__name__)
+        setattr(self, '__qualname__', self.__class__.__qualname__)
+
+        if self.s_type not in (_StateType.NONE, _StateType.EARLY_MATCH, _StateType.MATCH):
             if self.out is None:
                 self.out = _State()
             if self.out1 is None:
                 self.out1 = _State()
 
 
+_early_match_state = _State(s_type=_StateType.EARLY_MATCH)
 _match_state = _State(s_type=_StateType.MATCH)
 
 
@@ -235,6 +272,9 @@ def _post2nfa(postfix: Text) -> _State:
             s = _State(s_type=_StateType.SPLIT, out=elem.start)
             _set_state(elem.out, s)
             stack.push(_Fragment(elem.start, [s.out1]))
+        elif sym == _EARLY_MATCH_OP:
+            s = _early_match_state
+            stack.push(_Fragment(s, []))
         elif sym == _MATCH_OP:
             s = _match_state
             stack.push(_Fragment(s, []))
@@ -261,5 +301,78 @@ def _compile(pattern: Union[Text, RexPattern]) -> RexPattern:
     return RexPattern(pattern, _post2nfa(_re2post(pattern)))
 
 
-def _match(nfa: Any, string: Text) -> bool:
+#
+# Check whether SPLIT state points to EARLY_MATCH one
+#
+def _is_early_match(s: _State) -> bool:
+    if s.out is not None and s.out.s_type == _StateType.EARLY_MATCH:
+        return True
+
+    if s.out1 is not None and s.out1.s_type == _StateType.EARLY_MATCH:
+        return True
+
     return False
+
+
+#
+# Advance to next state (MATCH, EARLY_MATCH, SYM) for each arrow of all current states.
+# Label each passed state.
+#
+def _addstate(l: List[_State], m_session: _MatchSession, s: Union[_State, None]) -> None:
+    if s is None or s.s_type == _StateType.NONE or s.last_list == m_session.list_id:
+        return
+
+    s.last_list = m_session.list_id
+    if s.s_type == _StateType.SPLIT:
+        if _is_early_match(s):
+            # no need to waste time analyzing other possible NFA paths
+            raise StopIteration
+
+        _addstate(l, m_session, s.out)
+        _addstate(l, m_session, s.out1)
+        return
+
+    l.append(s)
+
+
+#
+# Initialize state list.
+#
+def _start_list(m_session: _MatchSession, start: _State) -> List[_State]:
+    l: List[_State] = []
+    m_session.list_id += 1
+    _addstate(l, m_session, start)
+
+    return l
+
+
+#
+# Step the NFA from the states in c_list past the symbol sym to create next NFA state set n_list.
+#
+def _step(c_list: List[_State], m_session: _MatchSession, sym: Text) -> List[_State]:
+    n_list: List[_State] = []
+    m_session.list_id += 1
+    for s in c_list:
+        if s.s_type == _StateType.SYM and s.sym == sym:
+            _addstate(n_list, m_session, s.out)
+
+    return n_list
+
+
+#
+# Run NFA to determine whether it matches string.
+#
+def _match(obj: RexPattern, string: Text) -> bool:
+    if obj._nfa.s_type == _StateType.MATCH:
+        return True
+
+    try:
+        c_list = _start_list(obj._m_session, obj._nfa)
+        for sym in string:
+            n_list = _step(c_list, obj._m_session, sym)
+            c_list = n_list
+    except StopIteration:
+        return True
+
+    # Check whether state list contains a match.
+    return bool([x for x in c_list if x.s_type == _StateType.MATCH])
