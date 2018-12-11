@@ -76,6 +76,7 @@ _CONCAT_OP: Text = '\x02'
 _REPEATER_SYMS = '*+?'
 _ESCAPE_SYM = '\\'
 _ESCAPABLE_SYMS = _REPEATER_SYMS + '(|)' + _ESCAPE_SYM
+_ESCAPABLE_SYMS_EX = ''.join((_REPEATER_SYMS, '(|)', _ESCAPE_SYM, _EARLY_MATCH_OP, _MATCH_OP, _CONCAT_OP))
 
 
 class _Paren(NamedTuple):
@@ -280,10 +281,22 @@ def _post2nfa(postfix: Text) -> _State:
     if not postfix:
         raise ValueError("postfix can't be empty")
 
+    escape: bool = False
     stack: Stack[_Fragment] = Stack()
 
     for sym in postfix:
-        if sym == _CONCAT_OP:
+        if escape:
+            if sym not in _ESCAPABLE_SYMS_EX:
+                raise ValueError('invalid escape sequence in postfix')
+
+            s = _State(sym=sym, s_type=_StateType.SYM)
+            stack.push(_Fragment(s, [s.out]))
+            escape = False
+            continue
+
+        if sym == _ESCAPE_SYM:
+            escape = True
+        elif sym == _CONCAT_OP:
             elem2 = stack.pop()
             elem1 = stack.pop()
             _set_state(elem1.out, elem2.start)
@@ -318,6 +331,9 @@ def _post2nfa(postfix: Text) -> _State:
         else:
             s = _State(sym=sym, s_type=_StateType.SYM)
             stack.push(_Fragment(s, [s.out]))
+
+    if escape:
+        raise ValueError('invalid escape sequence in postfix')
 
     elem = stack.pop()
     if not stack.is_empty():

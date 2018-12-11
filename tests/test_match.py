@@ -1,6 +1,7 @@
 import pytest
 
 from librex import match, compile
+from librex._impl import _MATCH_OP, _CONCAT_OP
 
 
 @pytest.mark.parametrize('re, string, expected_result', [
@@ -242,6 +243,18 @@ from librex import match, compile
     ('AbCd', 'AbCdEf', False),
     ('ГмФф', 'ГмФф', True),
     ('ГмФф', 'гмфФ', False),
+    # Escaping support
+    ('\\\\', '\\', True),
+    ('\\\\', '\\\\', False),
+    (r'\+', '+', True),
+    (r'a\+', 'a+', True),
+    (r'a\+d', 'a+d', True),
+    (r'\(df', '(df', True),
+    (r'\(df', '(df', True),
+    (r'(\(|[)?', '(', True),
+    (r'(\(|[\+)?', '[+', True),
+    (_MATCH_OP, _MATCH_OP, True),
+    (_CONCAT_OP + _CONCAT_OP, _CONCAT_OP + _CONCAT_OP, True),
 ])
 def test_match(re, string, expected_result):
     assert match(re, string) == expected_result

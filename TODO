@@ -1,7 +1,6 @@
 TODO List:
 
 - Better error reporting: error description plus current symbol position like in re.py
-- Add escaping support: \+, \(, \\, etc.
 - Add support for symbol 'any symbol': '.'
 - Add support for symbol classes: \s, \S, \d, \D, \w, \W
 - Add support for symbol sets: [...]
