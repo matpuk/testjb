@@ -10,6 +10,7 @@ setup(
     entry_points={
         'console_scripts': ['re-match = librex.main:cli']
     },
+    python_requires='>=3.7',
     setup_requires=['pytest-runner'],
     tests_require=['pytest', 'pytest-cov'],
     url='https://github.com/matpuk/testjb',
