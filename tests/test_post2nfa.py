@@ -1,6 +1,6 @@
 import pytest
 
-from librex._impl import _StateType, _State, _post2nfa, _match_state, _MATCH_OP, _CONCAT_OP
+from librex._impl import _StateType, _State, _post2nfa, _match_state, _MATCH_OP, _CONCAT_OP, _ESCAPE_SYM
 
 
 def compare_state(state, etalon):
@@ -87,7 +87,9 @@ def get_nfa_plus():
     (_MATCH_OP, _match_state),
     # 'a'
     ('a', _State('a', s_type=_StateType.SYM, out=_match_state, out1=_State())),
-    # 'ab.' <- 'ab'
+    # '\+'
+    (r'\+', _State('+', s_type=_StateType.SYM, out=_match_state, out1=_State())),
+    # 'ab<_CONCAT_OP>' <- 'ab'
     (
         ''.join(('ab', _CONCAT_OP)),
         _State(
@@ -101,6 +103,21 @@ def get_nfa_plus():
             ),
             out1=_State()
         )
+    ),
+    # 'a\*<_CONCAT_OP>' <- 'a\*'
+    (
+            ''.join((r'a\*', _CONCAT_OP)),
+            _State(
+                sym='a',
+                s_type=_StateType.SYM,
+                out=_State(
+                    sym='*',
+                    s_type=_StateType.SYM,
+                    out=_match_state,
+                    out1=_State()
+                ),
+                out1=_State()
+            )
     ),
     # 'ab|' <- 'a|b'
     (
@@ -148,6 +165,8 @@ def test_post2nfa(postfix, nfa):
     '',
     'ab',
     'ab|a'
+    r'\g',
+    r'df' + _CONCAT_OP + _ESCAPE_SYM,
 ])
 def test_post2nfa_negative(postfix):
     with pytest.raises(ValueError):

@@ -74,6 +74,9 @@ _MATCH_OP: Text = '\x01'
 _CONCAT_OP: Text = '\x02'
 
 _REPEATER_SYMS = '*+?'
+_ESCAPE_SYM = '\\'
+_ESCAPABLE_SYMS = _REPEATER_SYMS + '(|)' + _ESCAPE_SYM
+_ESCAPABLE_SYMS_EX = ''.join((_REPEATER_SYMS, '(|)', _ESCAPE_SYM, _EARLY_MATCH_OP, _MATCH_OP, _CONCAT_OP))
 
 
 class _Paren(NamedTuple):
@@ -94,17 +97,36 @@ class _Paren(NamedTuple):
 #      'a||b', '|', 'a|', 'a(b|)', etc. - are valid expressions now
 #
 def _re2post(re: Text) -> Text:
+    escape: bool = False
     paren: Stack[_Paren] = Stack()
     dst: List[Text] = []
     nalt: int = 0
     natom: int = 0
 
     if not re:
-        re = _MATCH_OP
+        return _MATCH_OP
 
     prev_sym: Text = ''
     for sym in re:
-        if sym == '(':
+        if escape:
+            if sym not in _ESCAPABLE_SYMS:
+                raise RexError()
+
+            if natom > 1:
+                dst.append(_CONCAT_OP)
+                natom -= 1
+
+            dst.append(_ESCAPE_SYM)
+            dst.append(sym)
+
+            escape = False
+            prev_sym = sym
+            natom += 1
+            continue
+
+        if sym == _ESCAPE_SYM:
+            escape = True
+        elif sym == '(':
             if natom > 1:
                 dst.append(_CONCAT_OP)
                 natom -= 1
@@ -159,12 +181,15 @@ def _re2post(re: Text) -> Text:
                 dst.append(_CONCAT_OP)
                 natom -= 1
 
+            if sym in (_EARLY_MATCH_OP, _MATCH_OP, _CONCAT_OP):
+                dst.append(_ESCAPE_SYM)
+
             dst.append(sym)
             natom += 1
 
         prev_sym = sym
 
-    if not paren.is_empty():
+    if not paren.is_empty() or escape:
         raise RexError()
 
     if natom == 0 and nalt > 0:
@@ -256,10 +281,22 @@ def _post2nfa(postfix: Text) -> _State:
     if not postfix:
         raise ValueError("postfix can't be empty")
 
+    escape: bool = False
     stack: Stack[_Fragment] = Stack()
 
     for sym in postfix:
-        if sym == _CONCAT_OP:
+        if escape:
+            if sym not in _ESCAPABLE_SYMS_EX:
+                raise ValueError('invalid escape sequence in postfix')
+
+            s = _State(sym=sym, s_type=_StateType.SYM)
+            stack.push(_Fragment(s, [s.out]))
+            escape = False
+            continue
+
+        if sym == _ESCAPE_SYM:
+            escape = True
+        elif sym == _CONCAT_OP:
             elem2 = stack.pop()
             elem1 = stack.pop()
             _set_state(elem1.out, elem2.start)
@@ -294,6 +331,9 @@ def _post2nfa(postfix: Text) -> _State:
         else:
             s = _State(sym=sym, s_type=_StateType.SYM)
             stack.push(_Fragment(s, [s.out]))
+
+    if escape:
+        raise ValueError('invalid escape sequence in postfix')
 
     elem = stack.pop()
     if not stack.is_empty():
