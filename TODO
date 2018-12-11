@@ -6,5 +6,4 @@ TODO List:
 - Add support for symbol classes: \s, \S, \d, \D, \w, \W
 - Add support for symbol sets: [...]
 - Add support for complementing symbol sets: [^...]
-- Split _impl.py into a number of .py files for readability: one per _re2post(), _compile(), _match()
-- Documentation: README.md plus module level docstring like in re.py
+- Documentation: README.md

@@ -20,6 +20,11 @@ from .stack import Stack
 #
 
 class RexError(Exception):
+    """Exception raised for invalid regular expressions.
+
+    Attributes:
+        message: The unformatted error message
+    """
     def __init__(self) -> None:
         self.message = 'Bad regular expression'
         super(RexError, self).__init__(self.message)
@@ -27,6 +32,11 @@ class RexError(Exception):
 
 @dataclass
 class RexPattern(object):
+    """Compiled regular expression object.
+
+    Attributes:
+        pattern: Original regular expression used to build the object
+    """
     pattern: Text
     _nfa: '_State' = None
     _m_session: '_MatchSession' = None
@@ -35,6 +45,9 @@ class RexPattern(object):
         self._m_session = _MatchSession(0)
 
     def match(self, string: Text) -> bool:
+        """Match compiled regular expression against string string, returning
+        True if the string matches or False otherwise.
+        """
         self._m_session.next()
         return _match(self, string)
 
@@ -72,13 +85,13 @@ class _Paren(NamedTuple):
 # Convert infix regexp re to postfix notation.
 # Insert _CONCAT_OP as explicit concatenation operator.
 #
-# Differences from the original algorithm:
+# Notes:
 #  - multiple consecutive repeater symbols generate RexError
 #  - introduced _EARLY_MATCH_OP and _MATCH_OP special symbols as a hint for compiler
 #    to generate EARLY_MATCH and MATCH states accordingly (see _post2nfa())
 #  - empty regexp re generates string with _MATCH_OP symbol
 #  - any empty alternative for '|' is replaced with _EARLY_MATCH_OP symbol:
-#      'a||b', '|', 'a|', etc. - are valid expressions now
+#      'a||b', '|', 'a|', 'a(b|)', etc. - are valid expressions now
 #
 def _re2post(re: Text) -> Text:
     paren: Stack[_Paren] = Stack()
