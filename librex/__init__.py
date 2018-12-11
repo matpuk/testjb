@@ -17,7 +17,19 @@ The special symbols are:
     "?"      Matches 0 or 1 (greedy) of the preceding RE.
     "|"      A|B, creates an RE that will match either A or B.
     (...)    Matches the RE inside the parentheses.
-    "\\"     Escapes special symbols including itself.
+    "\\"     Escapes special symbols.
+
+The special sequences consist of "\\" and a symbol from the list
+below. If the symbol is not on the list and is not the special symbol,
+then the RexError will be thrown.
+    \d       Matches any Unicode digit.
+    \D       Matches any Unicode non-digit symbol.
+    \s       Matches any Unicode whitespace symbol.
+    \S       Matches any Unicode non-whitespace character.
+    \w       Matches any Unicode alphanumeric symbol (letters plus digits
+             plus underscore).
+    \W       Matches the complement of \w.
+    \\       Matches a literal backslash.
 
 This module exports the following functions:
     match     Match a regular expression pattern to the whole string.

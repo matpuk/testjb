@@ -1,5 +1,5 @@
 import pytest
-from librex.stack import Stack
+from librex._stack import Stack
 
 
 def test_stack_basic():

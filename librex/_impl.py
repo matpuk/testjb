@@ -10,9 +10,10 @@
 from dataclasses import dataclass
 from enum import Enum
 from reprlib import recursive_repr, Repr
-from typing import Union, Text, NamedTuple, List
+from typing import Union, Text, NamedTuple, List, Callable
 
-from .stack import Stack
+from ._stack import Stack
+from ._symsets import get_symbol_set
 
 
 #
@@ -73,10 +74,11 @@ _EARLY_MATCH_OP: Text = '\x00'
 _MATCH_OP: Text = '\x01'
 _CONCAT_OP: Text = '\x02'
 
-_REPEATER_SYMS = '*+?'
 _ESCAPE_SYM = '\\'
-_ESCAPABLE_SYMS = _REPEATER_SYMS + '(|)' + _ESCAPE_SYM
-_ESCAPABLE_SYMS_EX = ''.join((_REPEATER_SYMS, '(|)', _ESCAPE_SYM, _EARLY_MATCH_OP, _MATCH_OP, _CONCAT_OP))
+_REPEATER_SYMS = '*+?'
+_SYMSETS_SYMS = 'dDsSwW'
+_ESCAPABLE_SYMS = ''.join(('.(|)', _SYMSETS_SYMS, _REPEATER_SYMS, _ESCAPE_SYM))
+_ESCAPABLE_SYMS_EX = ''.join((_ESCAPABLE_SYMS, _EARLY_MATCH_OP, _MATCH_OP, _CONCAT_OP))
 
 
 class _Paren(NamedTuple):
@@ -214,18 +216,20 @@ def _re2post(re: Text) -> Text:
 # if s_type == MATCH, no arrows out; matching state.
 # If s_type == SPLIT, unlabeled arrows to out and out1 (if != None or points to NONE state).
 # If s_type == SYM, labeled arrow with symbol sym to out.
+# If s_type == SYM_SET, labeled arrow with callable sym to out.
 #
 class _StateType(Enum):
     NONE = 0
     SYM = 1
-    EARLY_MATCH = 2
-    MATCH = 3
-    SPLIT = 4
+    SYM_SET = 2
+    EARLY_MATCH = 3
+    MATCH = 4
+    SPLIT = 5
 
 
 @dataclass
 class _State(object):
-    sym: Text = ''
+    sym: Union[Text, Callable[[Text], bool]] = ''
     s_type: _StateType = _StateType.NONE
     out: '_State' = None
     out1: '_State' = None
@@ -289,7 +293,11 @@ def _post2nfa(postfix: Text) -> _State:
             if sym not in _ESCAPABLE_SYMS_EX:
                 raise ValueError('invalid escape sequence in postfix')
 
-            s = _State(sym=sym, s_type=_StateType.SYM)
+            if sym in _SYMSETS_SYMS:
+                s = _State(sym=get_symbol_set(sym), s_type=_StateType.SYM_SET)
+            else:
+                s = _State(sym=sym, s_type=_StateType.SYM)
+
             stack.push(_Fragment(s, [s.out]))
             escape = False
             continue
@@ -328,6 +336,9 @@ def _post2nfa(postfix: Text) -> _State:
         elif sym == _MATCH_OP:
             s = _match_state
             stack.push(_Fragment(s, []))
+        elif sym == '.':
+            s = _State(sym=get_symbol_set(sym), s_type=_StateType.SYM_SET)
+            stack.push(_Fragment(s, [s.out]))
         else:
             s = _State(sym=sym, s_type=_StateType.SYM)
             stack.push(_Fragment(s, [s.out]))
@@ -368,7 +379,7 @@ def _is_early_match(s: _State) -> bool:
 
 
 #
-# Advance to next state (MATCH, EARLY_MATCH, SYM) for each arrow of all current states.
+# Advance to next state (MATCH, EARLY_MATCH, SYM, SYM_SET) for each arrow of all current states.
 # Label each passed state.
 #
 def _addstate(l: List[_State], m_session: _MatchSession, s: Union[_State, None]) -> None:
@@ -406,7 +417,7 @@ def _step(c_list: List[_State], m_session: _MatchSession, sym: Text) -> List[_St
     n_list: List[_State] = []
     m_session.list_id += 1
     for s in c_list:
-        if s.s_type == _StateType.SYM and s.sym == sym:
+        if (s.s_type == _StateType.SYM and s.sym == sym) or (s.s_type == _StateType.SYM_SET and s.sym(sym)):
             _addstate(n_list, m_session, s.out)
 
     return n_list
