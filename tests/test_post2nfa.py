@@ -1,6 +1,7 @@
 import pytest
 
 from librex._impl import _StateType, _State, _post2nfa, _match_state, _MATCH_OP, _CONCAT_OP, _ESCAPE_SYM
+from librex._symsets import get_symbol_set
 
 
 def compare_state(state, etalon):
@@ -89,6 +90,10 @@ def get_nfa_plus():
     ('a', _State('a', s_type=_StateType.SYM, out=_match_state, out1=_State())),
     # '\+'
     (r'\+', _State('+', s_type=_StateType.SYM, out=_match_state, out1=_State())),
+    # '.'
+    ('.', _State(get_symbol_set('.'), s_type=_StateType.SYM_SET, out=_match_state, out1=_State())),
+    # '\.'
+    (r'\.', _State('.', s_type=_StateType.SYM, out=_match_state, out1=_State())),
     # 'ab<_CONCAT_OP>' <- 'ab'
     (
         ''.join(('ab', _CONCAT_OP)),

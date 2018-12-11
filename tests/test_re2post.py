@@ -56,6 +56,18 @@ from librex._impl import _re2post, _CONCAT_OP, _EARLY_MATCH_OP, _MATCH_OP, _ESCA
     ('п*пф*', ''.join(('п*п', _CONCAT_OP, 'ф*', _CONCAT_OP))),
     # '\\' metacharacter (escaping)
     (r'\+', r'\+'),
+    (r'\?', r'\?'),
+    (r'\*', r'\*'),
+    (r'\(', r'\('),
+    (r'\|', r'\|'),
+    (r'\)', r'\)'),
+    (r'\s', r'\s'),
+    (r'\S', r'\S'),
+    (r'\d', r'\d'),
+    (r'\D', r'\D'),
+    (r'\w', r'\w'),
+    (r'\W', r'\W'),
+    (r'\.', r'\.'),
     (r'a\+', r'a\+' + _CONCAT_OP),
     (r'\\', r'\\'),
     (r'\*\?\+\(\|\)', ''.join(
