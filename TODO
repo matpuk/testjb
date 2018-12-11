@@ -1,6 +1,5 @@
 TODO List:
 
-- Better error reporting: error description plus current symbol position like in re.py
+- Better and consistent error reporting: error description plus current symbol position like in re.py
 - Add support for symbol sets: [...]
 - Add support for complementing symbol sets: [^...]
-- Documentation: README.md
